@@ -10,7 +10,7 @@ public class Prospector : MonoBehaviour {
 	static public Prospector 	S;
 
 	[Header("Set in Inspector")]
-	public TextAsset			deckXML;
+	public TextAsset	deckXML;
 	public TextAsset layoutXML;
 	public float xOffset = 3;
 	public float yOffset = -2.5f;
@@ -32,6 +32,7 @@ public class Prospector : MonoBehaviour {
 	void Start() {
 		deck = GetComponent<Deck> ();
 		deck.InitDeck (deckXML.text);
+		Deck.Shuffle(ref deck.cards);
 
 		layout = GetComponent<Layout>();
 		layout.ReadLayout(layoutXML.text);
@@ -74,8 +75,33 @@ public class Prospector : MonoBehaviour {
 			cp.SetSortingLayerName(tSD.layerName);
 			tableau.Add(cp);
 		}
+		foreach (CardProspector tCP in tableau){
+			foreach(int hid in tCP.slotDef.hiddenBy){
+				cp = FindCardByLayoutID(hid);
+				tCP.hiddenBy.Add(cp);
+			}
+		}
 		MoveToTarget(Draw ());
 		UpdateDrawPile();
+	}
+	CardProspector FindCardByLayoutID(int layoutID){
+		foreach (CardProspector tCP in tableau){
+			if (tCP.layoutID == layoutID){
+				return(tCP);
+			}
+		}
+		return(null);
+	}
+	void SetTableauFaces(){
+		foreach( CardProspector cd in tableau){
+			bool faceUp = true;
+			foreach(CardProspector cover in cd.hiddenBy){
+				if (cover.state == eCardState.tableau){
+					faceUp = false;
+				}
+			}
+			cd.faceUp = faceUp;
+		}
 	}
 	void MoveToDiscard(CardProspector cd){
 		cd.state = eCardState.discard;
@@ -83,10 +109,9 @@ public class Prospector : MonoBehaviour {
 		cd.transform.parent = layoutAnchor;
 
 		cd.transform.localPosition = new Vector3(
-			layout.multiplier.x * layout .discardPile.x,
+			layout.multiplier.x * layout.discardPile.x,
 			layout.multiplier.y * layout.discardPile.y,
-			-layout.discardPile.layerID+0.5f
-		);
+			-layout.discardPile.layerID+0.5f);
 		cd.faceUp = true;
 		cd.SetSortingLayerName(layout.discardPile.layerName);
 		cd.SetSortOrder(-100+discardPile.Count);
@@ -99,8 +124,8 @@ public class Prospector : MonoBehaviour {
 
 		cd.transform.localPosition = new Vector3(
 			layout.multiplier.x * layout.discardPile.x,
-			-layout.discardPile.layerID
-		);
+			layout.multiplier.y * layout.discardPile.y,
+			-layout.discardPile.layerID);
 		cd.faceUp = true;
 		cd.SetSortingLayerName(layout.discardPile.layerName);
 		cd.SetSortOrder(0);
@@ -110,6 +135,7 @@ public class Prospector : MonoBehaviour {
 		for (int i=0; i<drawPile.Count; i++){
 			cd = drawPile[i];
 			cd.transform.parent = layoutAnchor;
+
 			Vector2 dpStagger = layout.drawPile.stagger;
 			cd.transform.localPosition = new Vector3(
 				layout.multiplier.x * (layout.drawPile.x + i*dpStagger.x),
@@ -135,8 +161,47 @@ public class Prospector : MonoBehaviour {
 				if (!cd.faceUp){
 					validMatch = false;
 				}
-				if ()
+				if (!AdjacentRank(cd, target)){
+					validMatch = false;
+				}
+				if (!validMatch) return;
+				tableau.Remove(cd);
+				MoveToTarget(cd);
+				SetTableauFaces();
 				break;
 		}
+		CheckForGameOver();
+	}
+	void CheckForGameOver(){
+		if (tableau.Count==0){
+			GameOver(true);
+			return;
+		}
+		if (drawPile.Count>0){
+			return;
+		}
+		foreach (CardProspector cd in tableau){
+			if (AdjacentRank(cd, target)){
+				return;
+			}
+		}
+		GameOver(false);
+	}
+	void GameOver(bool won){
+		if (won){
+			print ("Game Over. You won! :)");
+		}else{
+			print ("Game Over. You Lost. :(");
+		}
+		SceneManager.LoadScene("__Prospector_Scene_0");
+	}
+	public bool AdjacentRank(CardProspector c0, CardProspector c1){
+		if (!c0.faceUp || !c1.faceUp) return(false);
+		if (Mathf.Abs(c0.rank - c1.rank) == 1){
+			return(true);
+		}
+		if (c0.rank == 1 && c1.rank == 13) return(true);
+		if (c0.rank == 13 && c1.rank == 1) return(true);
+		return(false);
 	}
 }
